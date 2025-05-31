@@ -31,41 +31,93 @@ export interface CalendarEvent {
   providedIn: 'root'
 })
 export class CalendarService {
-  private readonly graphApiEndpoint = 'https://graph.microsoft.com/v1.0';
+  // private readonly graphApiEndpoint = 'https://graph.microsoft.com/v1.0';
 
-  constructor(private http: HttpClient) {}
-
-  getEvents(email: string): Observable<CalendarEvent[]> {
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${this.getAccessToken()}`,
-      'Content-Type': 'application/json'
-    });
-
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 30); // Get events for next 30 days
-
-    const queryParams = new URLSearchParams({
-      $select: 'id,subject,start,end,location,attendees',
-      $filter: `start/dateTime ge '${startDate.toISOString()}' and end/dateTime le '${endDate.toISOString()}'`,
-      $orderby: 'start/dateTime'
-    });
-
-    return this.http.get<{ value: CalendarEvent[] }>(
-      `${this.graphApiEndpoint}/users/${email}/calendar/events?${queryParams}`,
-      { headers }
-    ).pipe(
-      map(response => response.value)
-    );
-  }
-
-  private getAccessToken(): string {
-    // Implement your token acquisition logic here
-    // This could be from a token service, local storage, or other secure storage
-    const token = localStorage.getItem('msal.accessToken');
-    if (!token) {
-      throw new Error('No access token available');
+  // Generate mock events for the current month
+  private readonly mockEvents: CalendarEvent[] = (() => {
+    const subjects = [
+      'Reunión de equipo',
+      'Llamada con cliente',
+      'Planificación de proyecto',
+      'Revisión de código',
+      'Presentación de resultados',
+      'Sesión de brainstorming',
+      'Capacitación interna',
+      'Demo de producto',
+      'Actualización semanal',
+      'Cierre de sprint'
+    ];
+    const locations = [
+      'Sala A',
+      'Sala B',
+      'Sala de conferencias',
+      'Oficina principal',
+      'Remoto',
+      'Microsoft Teams',
+      'Zoom',
+      'Google Meet'
+    ];
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // Pick 5 random days in the month
+    const eventDays = Array.from(new Set(Array.from({length: 5}, () => Math.floor(Math.random() * daysInMonth) + 1)));
+    let idCounter = 1;
+    const events: CalendarEvent[] = [];
+    for (const day of eventDays) {
+      const numEvents = Math.floor(Math.random() * 4) + 3; // 3-6 events
+      for (let i = 0; i < numEvents; i++) {
+        const startHour = 9 + i * 2;
+        const start = new Date(year, month, day, startHour, 0, 0);
+        const end = new Date(year, month, day, startHour + 1, 0, 0);
+        events.push({
+          id: (idCounter++).toString(),
+          subject: subjects[Math.floor(Math.random() * subjects.length)],
+          start: {
+            dateTime: start.toISOString(),
+            timeZone: 'America/Bogota'
+          },
+          end: {
+            dateTime: end.toISOString(),
+            timeZone: 'America/Bogota'
+          },
+          location: {
+            displayName: locations[Math.floor(Math.random() * locations.length)]
+          },
+          attendees: []
+        });
+      }
     }
-    return token;
+    return events;
+  })();
+
+  constructor(/* private http: HttpClient */) {}
+
+  // Always return mock data, never call a real API
+  getEvents(email: string): Observable<CalendarEvent[]> {
+    // Commented out real API/token logic
+    // const headers = new HttpHeaders({
+    //   'Authorization': `Bearer ${this.getAccessToken()}`,
+    //   'Content-Type': 'application/json'
+    // });
+    // ...
+    // return this.http.get<{ value: CalendarEvent[] }>(...)
+    //   .pipe(map(response => response.value));
+
+    return new Observable(observer => {
+      observer.next(this.mockEvents);
+      observer.complete();
+    });
   }
+
+  // private getAccessToken(): string {
+  //   // Implement your token acquisition logic here
+  //   // This could be from a token service, local storage, or other secure storage
+  //   const token = localStorage.getItem('msal.accessToken');
+  //   if (!token) {
+  //     throw new Error('No access token available');
+  //   }
+  //   return token;
+  // }
 } 

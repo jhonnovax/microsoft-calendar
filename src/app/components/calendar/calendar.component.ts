@@ -1,110 +1,146 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { CalendarService, CalendarEvent } from '../../services/calendar.service';
 
 @Component({
   selector: 'app-calendar',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
-    <div class="calendar-container p-4">
-      <div class="calendar-header mb-4">
-        <h2 class="text-2xl font-bold">Calendar Events</h2>
-        <div class="flex gap-2 mt-2">
-          <input 
-            type="email" 
-            [(ngModel)]="userEmail" 
-            placeholder="Enter email address"
-            class="input input-bordered w-full max-w-xs"
-          />
-          <button 
-            (click)="fetchEvents()"
-            class="btn btn-primary"
-            [disabled]="isLoading"
-          >
-            {{ isLoading ? 'Loading...' : 'Fetch Events' }}
-          </button>
+    <div class="calendar-root">
+      <div class="calendar-root__calendar-panel">
+        <div class="calendar-root__calendar-header">
+          <button class="calendar-root__nav-btn" (click)="prevMonth()">&#60;</button>
+          <span class="calendar-root__month-label">{{ monthNames[displayMonth] }} {{ displayYear }}</span>
+          <button class="calendar-root__nav-btn" (click)="nextMonth()">&#62;</button>
+        </div>
+        <div class="calendar-root__weekdays">
+          <div *ngFor="let day of weekDays" class="calendar-root__weekday">{{ day }}</div>
+        </div>
+        <div class="calendar-root__days">
+          <ng-container *ngFor="let day of calendarDays; let i = index">
+            <div *ngIf="day === 0" class="calendar-root__empty-day"></div>
+            <button *ngIf="day > 0"
+              class="calendar-root__day-btn"
+              [ngClass]="{
+                'calendar-root__day-btn--selected': isSelected(day),
+                'calendar-root__day-btn--has-events': hasEvents(day)
+              }"
+              (click)="selectDay(day)">
+              {{ day }}
+            </button>
+          </ng-container>
         </div>
       </div>
-
-      <div *ngIf="error" class="alert alert-error mb-4">
-        {{ error }}
-      </div>
-
-      <div class="calendar-grid grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <div *ngFor="let event of events" class="card bg-base-100 shadow-xl">
-          <div class="card-body">
-            <h3 class="card-title">{{ event.subject }}</h3>
-            <div class="text-sm opacity-70">
-              <p>Start: {{ formatDateTime(event.start.dateTime) }}</p>
-              <p>End: {{ formatDateTime(event.end.dateTime) }}</p>
-              <p *ngIf="event?.location?.displayName">
-                Location: {{ event?.location?.displayName }}
-              </p>
+      <div class="calendar-root__events-panel">
+        <div class="calendar-root__events-header">Próximos Eventos</div>
+        <ng-container *ngIf="selectedEvents.length > 0; else noEvents">
+          <div *ngFor="let event of selectedEvents" class="calendar-root__event">
+            <div class="calendar-root__event-date">
+              <span class="calendar-root__event-day">{{ getDay(event.start.dateTime) }}</span>
+              <span class="calendar-root__event-month">Sep</span>
             </div>
-            <div *ngIf="event.attendees?.length" class="mt-2">
-              <h4 class="font-semibold">Attendees:</h4>
-              <ul class="list-disc list-inside">
-                <li *ngFor="let attendee of event.attendees">
-                  {{ attendee.emailAddress.name }}
-                </li>
-              </ul>
-            </div>
+            <div class="calendar-root__event-title" [innerHTML]="highlightTitle(event.subject)"></div>
+            <div class="calendar-root__event-location">{{ event.location?.displayName }}</div>
+            <div class="calendar-root__event-description">{{ eventDescription(event) }}</div>
           </div>
-        </div>
-      </div>
-
-      <div *ngIf="events.length === 0 && !isLoading && !error" class="text-center mt-8">
-        <p class="text-lg opacity-70">No events found for the selected period.</p>
+        </ng-container>
+        <ng-template #noEvents>
+          <div class="calendar-root__no-events">No hay eventos para este día.</div>
+        </ng-template>
       </div>
     </div>
   `,
-  styles: [`
-    .calendar-container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-  `]
+  styleUrls: ['./calendar.component.scss']
 })
 export class CalendarComponent implements OnInit {
   events: CalendarEvent[] = [];
-  userEmail: string = '';
-  isLoading: boolean = false;
-  error: string | null = null;
+  selectedEvents: CalendarEvent[] = [];
+  selectedDate: Date = new Date();
+  displayMonth: number = this.selectedDate.getMonth();
+  displayYear: number = this.selectedDate.getFullYear();
+  calendarDays: number[] = [];
+
+  weekDays = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'];
+  monthNames = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
 
   constructor(private calendarService: CalendarService) {}
 
-  ngOnInit(): void {}
-
-  fetchEvents(): void {
-    if (!this.userEmail) {
-      this.error = 'Please enter an email address';
-      return;
-    }
-
-    this.isLoading = true;
-    this.error = null;
-
-    this.calendarService.getEvents(this.userEmail).subscribe({
-      next: (data) => {
-        this.events = data;
-        this.isLoading = false;
-      },
-      error: (err) => {
-        this.error = 'Error fetching calendar events. Please try again.';
-        this.isLoading = false;
-        console.error('Error fetching events:', err);
-      }
+  ngOnInit(): void {
+    this.calendarService.getEvents('').subscribe(data => {
+      this.events = data;
+      this.updateCalendar();
+      this.selectDay(this.selectedDate.getDate());
     });
   }
 
-  formatDateTime(dateTimeStr: string): string {
-    const date = new Date(dateTimeStr);
-    return new Intl.DateTimeFormat('en-US', {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(date);
+  updateCalendar() {
+    const firstDay = new Date(this.displayYear, this.displayMonth, 1).getDay();
+    const daysInMonth = new Date(this.displayYear, this.displayMonth + 1, 0).getDate();
+    this.calendarDays = [];
+    for (let i = 0; i < firstDay; i++) this.calendarDays.push(0);
+    for (let d = 1; d <= daysInMonth; d++) this.calendarDays.push(d);
   }
-  
+
+  prevMonth() {
+    if (this.displayMonth === 0) {
+      this.displayMonth = 11;
+      this.displayYear--;
+    } else {
+      this.displayMonth--;
+    }
+    this.updateCalendar();
+    this.selectedEvents = [];
+  }
+
+  nextMonth() {
+    if (this.displayMonth === 11) {
+      this.displayMonth = 0;
+      this.displayYear++;
+    } else {
+      this.displayMonth++;
+    }
+    this.updateCalendar();
+    this.selectedEvents = [];
+  }
+
+  selectDay(day: number) {
+    this.selectedDate = new Date(this.displayYear, this.displayMonth, day);
+    const dateStr = this.selectedDate.toISOString().slice(0, 10);
+    this.selectedEvents = this.events.filter(ev => ev.start.dateTime.startsWith(dateStr));
+  }
+
+  isSelected(day: number): boolean {
+    return (
+      this.selectedDate.getDate() === day &&
+      this.selectedDate.getMonth() === this.displayMonth &&
+      this.selectedDate.getFullYear() === this.displayYear
+    );
+  }
+
+  hasEvents(day: number): boolean {
+    const dateStr = new Date(this.displayYear, this.displayMonth, day).toISOString().slice(0, 10);
+    return this.events.some(ev => ev.start.dateTime.startsWith(dateStr));
+  }
+
+  getDay(dateTime: string): string {
+    return new Date(dateTime).getDate().toString().padStart(2, '0');
+  }
+
+  highlightTitle(title: string): string {
+    // Bold the first part before a comma or dash
+    const match = title.match(/^[^,\-]+/);
+    if (match) {
+      return `<b>${match[0]}</b>${title.slice(match[0].length)}`;
+    }
+    return title;
+  }
+
+  eventDescription(event: CalendarEvent): string {
+    // Use subject as description if no description field
+    return event.subject;
+  }
 } 
